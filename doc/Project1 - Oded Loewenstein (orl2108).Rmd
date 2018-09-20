@@ -9,9 +9,9 @@ by Oded Loewenstein
 
 Hi and welcome to my blog! 
 <br/>
-Today I'm going to try to analyze geographical differences in happy moments and to try to think how businesses could use such an analysis to their advantage. Happy moments is a corpus of 100,000 happy moments collected from various countries across the globe.
+Today I'm going to try to analyze happy moments and to try to think how businesses could use such an analysis to their advantage. Happy moments is a corpus of 100,000 happy moments collected from various countries across the globe (https://rit-public.github.io/HappyDB/).
 
-```{r, warning=FALSE, echo = FALSE, include= FALSE}
+```{r constructing_hm_data , warning=FALSE, echo = FALSE, include= FALSE}
 library(tm)
 library(tidytext)
 library(tidyverse)
@@ -23,6 +23,11 @@ library("maps")
 library("maptools")
 library("ggmap")
 library(plotrix)
+library(scales)
+library(wordcloud2)
+library(gridExtra)
+library(ngram)
+library(shiny) 
 urlfile<-'https://raw.githubusercontent.com/rit-public/HappyDB/master/happydb/data/cleaned_hm.csv'
 hm_data <- read_csv(urlfile)
 corpus <- VCorpus(VectorSource(hm_data$cleaned_hm))%>%
@@ -75,15 +80,6 @@ hm_data <- hm_data %>%
 
 write_csv(hm_data, "processed_moments.csv")
 
-library(tidyverse)
-library(tidytext)
-library(DT)
-library(scales)
-library(wordcloud2)
-library(gridExtra)
-library(ngram)
-library(shiny) 
-
 urlfile<-'https://raw.githubusercontent.com/rit-public/HappyDB/master/happydb/data/demographic.csv'
 demo_data <- read.csv(urlfile)
 
@@ -107,13 +103,18 @@ hm_data <- hm_data %>%
   mutate(reflection_period = fct_recode(reflection_period, 
                                         months_3 = "3m", hours_24 = "24h"))
 ```
-Businesses nowadays strive to optimize their operations. Using the happy moment database, businesses can learn the geographic differences in what makes people happy, and optimize their opeations accordingly: by understanding what makes people happy in each area in the world, a company can market specific products or even produce a new product or service that specifically caters to the needs and desires in each area. 
+Businesses nowadays strive to optimize their operation. Using the happy moment database, businesses can learn the differences in the reasons behind what makes people happy under various segmentations. This will allow them to optimize their opeations by catering to each segment by offering them prodcuts or services that cater to their specific needs and desires.
 
-To do so, we first need to define a subject for each happy moment. A very intuitive technique for such an analysis is the "tf-idf" technique, because it measures the importance of word to a specific document. Therefore, the most important word would define the document best. This "importance score" is computed by multiplying two different measures:
+To do so, we first need to define a "subject" for each happy moment, the "reason" that moment was associated with happiness. A very intuitive technique for such an analysis is the "tf-idf" technique, which measures the importance of word to a specific text. Thus, the most important word would define the document best. this measure is constructed from 2 terms: 
+<br/>
 (1) Term frequency - the number of times a word occurs in a document
-(2) Inverse document frequency - because some words are more common than others (for example, "the" is a very common word but it's unlikely that it is the subject of a document), this measure decreases the weight of words that occur frequently across many documents: 
-By multiplying the two, we get the tf-idf function, which essentially provides the importance of a word to it's document and in other words, tells us the "subject" or the "reason" for the happy moment. 
-```{r, warning=FALSE, echo = FALSE, include= FALSE}
+<br/>
+(2) Inverse document frequency - because some words are more common than others (for example, "the" is a very common word but it's unlikely that it is the subject of a document), this measure decreases the weight of words that occur frequently across many documents.
+<br/>
+
+By multiplying the two terms, we get the tf-idf function, which essentially provides the importance of a word to it's text or in other words, tells us the "subject" or the "reason" for the happy moment. 
+
+```{r tf-idf, warning=FALSE, echo = FALSE, include= FALSE}
 
 hm_words <- hm_data %>%
   unnest_tokens(word, text) %>%
@@ -141,10 +142,10 @@ for(i in 1:dim(country.sub)[1]){
 }
 ```
 
-After doing the statistical work and learning the most frequent subject of every happy moment, let's look at some of the conclusions that could be infer from the results:
+After constrcuting the tf-idf and learning the subject of every happy moment, let's look at some of the conclusions that could be infer from the results:
 
 **The 10 most common "subjects" of happy moments in USA**
-```{r, warning=FALSE, echo = FALSE}
+```{r 10_most_common_USA, warning=FALSE, echo = FALSE}
 ind <- sort(table(hm_words.imp$word[hm_words.imp$country==unique(hm_words.imp$country)[1]]), decreasing = T)[1:10]
 usa <- sort(table(hm_words.imp$word[hm_words.imp$country==unique(hm_words.imp$country)[2]]), decreasing = T)[1:10]
 
@@ -157,11 +158,11 @@ plot_ly(
 )
 ```
 <br/>
-First, some measures can and should be done to merge similarities (for example, in the use example finace and fiancee are probably the same). Furthermore, they can be grouped with other similar subjects (some could say that boyfriend belongs with the fiancee group), this difference can also provide useful segmentation. For example, ***Explora***, a online travel retailer, may advertise romantic destinations to places with many soon-to-be-married and a trip to disneyland to somebody who his happy moments are with his daughter.
+First, we should note that some measures can and should be done to merge similarities (for example, in the use example "finace" and "fiancee" are probably the same). Furthermore, they can be grouped with other similar subjects (some could say that "boyfriend" belongs with the fiancee group). However, these difference can sometimes provide useful segmentation. For example, ***Explora***, a online travel retailer, may advertise romantic destinations to places with many soon-to-be-married and a trip to disneyland to somebody who his happy moments are with his daughter.
 
 <br/>
 **The 10 most common "subjects" of happy moments in India**
-```{r, warning=FALSE, echo = FALSE}
+```{r 10_most_common_India, warning=FALSE, echo = FALSE}
 plot_ly(
   x = as.numeric(ind),
   y = names(ind), 
@@ -170,11 +171,13 @@ plot_ly(
 )
 ```
 
-Let's again step into ***Explora***'s shoes: if people in India are primarily happy with from things related to the temple and shopping, by marketing mainly trips to sacred and religous places with many shopping shopping options. However, in the US ***Explora*** will mainly market trips with events or, as metioned eariler, romantic trips.By mapping the frequent happy moments across different parts of the globe, a company could easily optimize sales by understanding what makes most people happy in that country.
+Now, Let's step into ***Explora***'s shoes for a second example: if people in India are primarily happy with from things related to the temple and shopping, ***Explora*** could market mainly trips to sacred and religous places with shopping possibilities. However, in the US ***Explora*** will mainly market trips with events or, as metioned eariler, romantic trips. 
+<br/>
+By mapping the most frequent happy moments geographically, a company could easily optimize sales by understanding what makes most people happy in that country. A simple example of the most common "subject" in 5 selected countries:
 
 <br/>
 **The most common "subject" of happy moments in 5 selected countries**
-```{r, warning=FALSE, echo = FALSE}
+```{r most_common_map, warning=FALSE, echo = FALSE}
 ind.1 <- names(sort(table(hm_words.imp$word[hm_words.imp$country==unique(hm_words.imp$country)[1]]), decreasing = T)[1])
 usa.1 <- names(sort(table(hm_words.imp$word[hm_words.imp$country==unique(hm_words.imp$country)[2]]), decreasing = T)[1])
 uga.1 <- names(sort(table(hm_words.imp$word[hm_words.imp$country==unique(hm_words.imp$country)[8]]), decreasing = T)[1])
@@ -190,11 +193,11 @@ text(x,y, c(ind.1, usa.1, uga.1, aus.1, bra.1), col = c(1,4,2,5,3), cex = 0.5)
 ```
 <br/>
 <br/>
-Finally, further segmentations could be made to optimize even further the marketing in each area, like distinguishing between genders in each area. Let's take ***Mamazon***, an online merchandise retailer, as an example. The graphs below illustrate the 10 most frequent happy moment subjects among women and men the US. 
+Finally, further segmentations could be made to optimize even further the marketing in each area, like distinguishing between genders. Let's take ***Mamazon***, an online merchandise retailer, as an example. The graphs below illustrate the 10 most frequent happy moment subjects among women and men the US. 
 
 <br/>
 **Comparison between women's and Men's most common "subject" of happy moments**
-```{r, warning=FALSE, echo = FALSE}
+```{r Female_Male_US, warning=FALSE, echo = FALSE}
 usa.data <- hm_words.imp[hm_words.imp$country=="USA",]
 female <- sort(table(usa.data$word[usa.data$gender=="f"]), decreasing = T)[1:10]
 male <- sort(table(usa.data$word[usa.data$gender=="m"]), decreasing = T)[1:10]
@@ -217,9 +220,13 @@ pie3D(male, labels = labels.male, labelcex = 0.8, main = "Male")
 
 We can easily observe that for women, events is much more associated with happiness then for men. We can also observe that while for both gender the spouse has a similar frequency of importance, women's other main sources of happiness are still family (daughter, grandchildren), while for men it is success and hobbies (money, work, guitar, fishing). Therefore, ***Mamazon*** could put a higher emphasise on advertising gifts for family members when the user is a women, and gifts for the actual user when the user is a male.
 
+**Conclusion**
+<br/>
 To conclude, we witnessed how text processing of happy moments could be a integral tool for businesses to optimze their marketing and services offered using the tf-idf function. It should be noted that with some modifications (combining similar words or "reasons" mentioned before is just the tip of the iceberg), we could reach even better results.
 
-Reference:
+<br/>
+**Reference**
+<br/>
 Akari Asai, Sara Evensen, Behzad Golshan, Alon Halevy, Vivian Li, Andrei Lopatenko, 
 Daniela Stepanov, Yoshihiko Suhara, Wang-Chiew Tan, Yinzhan Xu, 
 ``HappyDB: A Corpus of 100,000 Crowdsourced Happy Moments'', LREC '18, May 2018. (to appear)
